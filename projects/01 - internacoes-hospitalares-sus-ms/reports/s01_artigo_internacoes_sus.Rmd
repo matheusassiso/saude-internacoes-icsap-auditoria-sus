@@ -1,0 +1,227 @@
+---
+title: "Painel de internações SUS em Mato Grosso do Sul"
+author: "Matheus Assis de Oliveira"
+date: "`r format(Sys.Date(), '%d/%m/%Y')`"
+abstract: |
+  Este relatório técnico apresenta uma análise descritiva das internações financiadas pelo SUS em Mato Grosso do Sul em 2024, usando arquivos SIH/SUS RD (AIH reduzida) do DATASUS. O texto foi escrito para auditores e técnicos de saúde que precisam entender os indicadores sem depender de formação estatística avançada. O objetivo é mostrar volume, valor aprovado, permanência média, mortalidade bruta e distribuição municipal, com leitura operacional para triagem de auditoria. Os resultados não são ranking de qualidade hospitalar e não substituem auditoria documental, análise clínica ou ajuste de risco.
+output:
+  pdf_document:
+    toc: true
+    number_sections: true
+    fig_caption: true
+    latex_engine: pdflatex
+  html_document:
+    toc: true
+    number_sections: true
+    df_print: paged
+fontsize: 11pt
+geometry: margin=1in
+header-includes:
+  - \usepackage{booktabs}
+  - \usepackage{float}
+  - \usepackage{caption}
+  - \captionsetup{font=small,labelfont=bf}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE, fig.align = "center", fig.width = 7, fig.height = 4.4, dpi = 150)
+library(dplyr)
+library(ggplot2)
+library(knitr)
+library(readr)
+library(scales)
+library(sf)
+municipal <- read_csv("../data/processed/sih_rd_ms_2024_resumo_municipal.csv", show_col_types = FALSE)
+monthly <- read_csv("../data/processed/sih_rd_ms_2024_resumo_mensal.csv", show_col_types = FALSE)
+sih <- read_csv("../data/processed/sih_rd_ms_2024_internacoes.csv", show_col_types = FALSE)
+priority <- read_csv("../data/processed/s01_prioridade_auditoria_municipios.csv", show_col_types = FALSE)
+geo <- st_read("../docs/mapa_painel.geojson", quiet = TRUE)
+fmt_int <- function(x) format(round(x), big.mark = ".", decimal.mark = ",", scientific = FALSE)
+fmt_num <- function(x, digits = 1) format(round(x, digits), big.mark = ".", decimal.mark = ",", scientific = FALSE, nsmall = digits)
+fmt_money <- function(x) paste0("R$ ", format(round(x, 2), big.mark = ".", decimal.mark = ",", scientific = FALSE, nsmall = 2))
+fmt_pct <- function(x) paste0(fmt_num(x, 2), "%")
+total_hosp <- nrow(sih)
+total_value <- sum(sih$total_value_brl, na.rm = TRUE)
+total_deaths <- sum(sih$death == 1, na.rm = TRUE)
+overall_mortality <- total_deaths / total_hosp * 100
+mean_los <- mean(sih$length_of_stay_days, na.rm = TRUE)
+avg_value <- total_value / total_hosp
+top_mun <- municipal |> slice_max(hospitalizations, n = 1, with_ties = FALSE)
+top_month <- monthly |> slice_max(hospitalizations, n = 1, with_ties = FALSE)
+```
+
+# Resumo Executivo
+
+Em 2024, a base analisada contém `r fmt_int(total_hosp)` internações SUS em Mato Grosso do Sul, com `r fmt_money(total_value)` de valor aprovado, `r fmt_int(total_deaths)` óbitos hospitalares registrados, mortalidade bruta de `r fmt_pct(overall_mortality)` e permanência média de `r fmt_num(mean_los, 1)` dias.
+
+Para auditoria, o ponto mais importante é separar **produção hospitalar** de **risco populacional**. Este relatório usa o município de internação (`munic_mov`), portanto mede onde o atendimento foi produzido. Campo Grande, Dourados e outros municípios de referência naturalmente concentram casos de residentes de várias localidades. Essa concentração pode indicar papel assistencial regional, e não necessariamente problema de desempenho.
+
+O painel interativo em `docs/index.html` foi reconstruído com mapa municipal. Ele permite alternar entre internações, valor aprovado, mortalidade bruta, permanência média e um escore exploratório de prioridade de auditoria.
+
+# Problema de Auditoria
+
+Auditores e técnicos de saúde precisam responder perguntas operacionais como:
+
+- Onde se concentra a produção hospitalar SUS no estado?
+- Quais municípios concentram maior valor aprovado?
+- Onde a mortalidade bruta ou a permanência média chamam atenção?
+- Quais municípios merecem revisão inicial antes de uma auditoria documental mais cara?
+
+Essas perguntas exigem estatística descritiva bem explicada. A análise não procura provar causalidade. Ela organiza sinais para orientar revisão, comparação e priorização.
+
+# Fonte de Dados e Unidade de Análise
+
+Os dados vêm do SIH/SUS, arquivo RD de AIH reduzida, disponibilizado pelo DATASUS. A unidade de análise é a autorização de internação hospitalar registrada no sistema. Cada linha representa uma AIH, não uma pessoa única. Um mesmo paciente pode aparecer mais de uma vez se houver mais de uma internação.
+
+```{r dataset-summary}
+tibble::tribble(
+  ~Indicador, ~Valor,
+  "Sistema", "SIH/SUS - AIH reduzida (RD)",
+  "Ano analisado", "2024",
+  "Unidade federativa", "Mato Grosso do Sul",
+  "Unidade estatística", "AIH / internação registrada",
+  "Município usado no mapa", "Município de internação (munic_mov)",
+  "Internações", fmt_int(total_hosp),
+  "Municípios na malha", fmt_int(nrow(geo)),
+  "Municípios com internação registrada", fmt_int(sum(geo$hospitalizations > 0))
+) |> kable(booktabs = TRUE, caption = "Escopo da base analisada.")
+```
+
+# Método Estatístico, em Linguagem Operacional
+
+## Contagem
+
+A contagem de internações é simplesmente o número de AIHs no período. Ela mede volume de produção hospitalar. Municípios com mais hospitais ou serviços de referência tendem a ter maior volume.
+
+## Valor aprovado
+
+O valor aprovado soma `val_tot`, que é valor administrativo aprovado no SIH/SUS. Ele não deve ser lido como custo total do cuidado. Para auditoria, ele ajuda a localizar onde está o maior impacto financeiro registrado.
+
+## Mortalidade bruta
+
+A mortalidade bruta foi calculada por:
+
+\[
+\text{Mortalidade bruta} =
+\frac{\text{óbitos hospitalares}}{\text{internações}} \times 100
+\]
+
+Ela é chamada de bruta porque não ajusta idade, diagnóstico, gravidade, complexidade, comorbidades, transferência ou perfil do hospital. Por isso, deve ser usada como **sinal de triagem**, não como ranking de qualidade.
+
+## Permanência média
+
+A permanência média soma os dias de internação e divide pelo número de internações. Valores maiores podem refletir casos mais complexos, gargalo de alta, perfil assistencial diferente ou erro/heterogeneidade de registro.
+
+## Escore exploratório de prioridade
+
+O escore de prioridade combina quatro sinais: volume de internações, valor aprovado, mortalidade bruta e permanência média. Ele não é indicador oficial. É uma ferramenta exploratória para ordenar municípios que podem merecer revisão inicial.
+
+# Resultados Estaduais
+
+```{r state-overview}
+tibble::tribble(
+  ~Indicador, ~Valor, ~Leitura_para_auditoria,
+  "Internações", fmt_int(total_hosp), "Dimensiona o volume total de AIHs no ano.",
+  "Valor aprovado", fmt_money(total_value), "Mostra o impacto financeiro administrativo.",
+  "Valor médio por internação", fmt_money(avg_value), "Ajuda a comparar intensidade financeira média.",
+  "Óbitos hospitalares", fmt_int(total_deaths), "Contagem bruta de desfechos fatais registrados.",
+  "Mortalidade bruta", fmt_pct(overall_mortality), "Sinal exploratório; exige ajuste de risco para comparar qualidade.",
+  "Permanência média", paste0(fmt_num(mean_los, 1), " dias"), "Sinal de complexidade, fluxo assistencial ou permanência prolongada."
+) |> kable(booktabs = TRUE, caption = "Indicadores estaduais e interpretação operacional.")
+```
+
+# Série Mensal
+
+```{r monthly-plot, fig.cap="Internações mensais SUS em Mato Grosso do Sul, 2024."}
+ggplot(monthly, aes(x = month, y = hospitalizations)) +
+  geom_col(fill = "#2f6f9f") +
+  geom_text(aes(label = fmt_int(hospitalizations)), vjust = -0.25, size = 3) +
+  scale_x_continuous(breaks = 1:12) +
+  scale_y_continuous(labels = label_number(big.mark = ".", decimal.mark = ","), expand = expansion(mult = c(0, .12))) +
+  labs(x = "Mês de competência", y = "Internações", caption = "Fonte: SIH/SUS RD, DATASUS.") +
+  theme_minimal(base_size = 11)
+```
+
+O maior volume mensal ocorreu no mês `r top_month$month`, com `r fmt_int(top_month$hospitalizations)` internações. Para auditoria, variações mensais devem ser lidas com calendário, sazonalidade, disponibilidade de leitos, processamento administrativo e eventual represamento de produção.
+
+# Mapa Municipal
+
+```{r map-plot, fig.cap="Mapa municipal das internações SUS por município de internação, Mato Grosso do Sul, 2024."}
+ggplot(geo) +
+  geom_sf(aes(fill = hospitalizations), color = "white", linewidth = 0.1) +
+  scale_fill_viridis_c(option = "C", labels = label_number(big.mark = ".", decimal.mark = ","), trans = "sqrt") +
+  labs(fill = "Internações", caption = "Fonte: SIH/SUS RD e malha municipal IBGE.") +
+  theme_void(base_size = 11)
+```
+
+O mapa evidencia a concentração espacial da produção hospitalar. Essa concentração é esperada em municípios com maior rede hospitalar e papel de referência regional. O mapa não mostra, sozinho, onde a população adoeceu; ele mostra onde a internação foi registrada.
+
+# Municípios com Maior Volume
+
+```{r top-table}
+municipal |>
+  slice_max(hospitalizations, n = 12, with_ties = FALSE) |>
+  transmute(
+    Municipio = hospitalization_municipality,
+    Internacoes = fmt_int(hospitalizations),
+    `Valor aprovado` = fmt_money(total_value_brl),
+    Obitos = fmt_int(deaths),
+    `Mortalidade bruta` = fmt_pct(mortality_rate_pct),
+    `Permanencia media` = paste0(fmt_num(mean_length_of_stay, 1), " dias"),
+    `Valor medio` = fmt_money(average_value_brl)
+  ) |>
+  kable(booktabs = TRUE, caption = "Municípios com maior volume de internações por local de internação.")
+```
+
+O município com maior volume foi `r top_mun$hospitalization_municipality`, com `r fmt_int(top_mun$hospitalizations)` internações. Isso deve ser interpretado como concentração de produção hospitalar e capacidade instalada, não como maior risco populacional.
+
+# Priorização Exploratória para Auditoria
+
+```{r priority-table}
+priority |>
+  mutate(
+    Internacoes = fmt_int(Internacoes),
+    `Valor aprovado` = fmt_money(Valor_aprovado),
+    `Mortalidade bruta` = fmt_pct(Mortalidade),
+    `Permanencia media` = paste0(fmt_num(Permanencia_media, 1), " dias"),
+    `Escore` = fmt_num(Escore_prioridade * 100, 1)
+  ) |>
+  select(Municipio, Internacoes, `Valor aprovado`, `Mortalidade bruta`, `Permanencia media`, `Escore`) |>
+  kable(booktabs = TRUE, caption = "Municípios priorizados por escore exploratório de auditoria.")
+```
+
+Este escore é uma régua de triagem. Ele aponta municípios onde volume, valor, mortalidade e permanência aparecem simultaneamente em patamar elevado. A etapa seguinte deve ser documental: perfil de procedimentos, diagnósticos, complexidade, CNES, AIHs específicas, glosas, permanências atípicas e compatibilidade entre produção e capacidade instalada.
+
+# Cuidados de Interpretação
+
+1. Município de internação não é município de residência.
+2. Mortalidade bruta não é indicador ajustado de qualidade.
+3. Valor aprovado não é custo total do serviço.
+4. AIH é registro administrativo e pode refletir regras de processamento.
+5. Diferenças territoriais podem refletir hierarquia da rede, referência regional e concentração de serviços.
+
+# Recomendações para Auditores e Técnicos
+
+- Usar o painel para escolher municípios e indicadores que merecem investigação.
+- Cruzar municípios com alta produção e alto valor aprovado com tipo de procedimento e complexidade.
+- Tratar mortalidade bruta elevada como sinal para aprofundamento, nunca como conclusão.
+- Comparar permanência média com perfil de casos e disponibilidade de retaguarda.
+- Construir uma segunda etapa com município de residência e denominadores populacionais para avaliar risco populacional.
+
+# Reprodutibilidade
+
+Arquivos principais:
+
+- `data/processed/sih_rd_ms_2024_internacoes.csv`
+- `data/processed/sih_rd_ms_2024_resumo_mensal.csv`
+- `data/processed/sih_rd_ms_2024_resumo_municipal.csv`
+- `data/processed/s01_prioridade_auditoria_municipios.csv`
+- `docs/mapa_painel.geojson`
+- `docs/index.html`
+
+O script `scripts/reconstruir_s01_portugues.R` reconstrói o painel, o mapa e este relatório.
+
+# Conclusão
+
+O projeto S01 foi reestruturado como ferramenta de leitura operacional para auditoria em saúde. A principal entrega é um painel territorial que combina produção hospitalar, valor aprovado, mortalidade bruta, permanência média e priorização exploratória. O ganho metodológico está em tornar os indicadores claros, auditáveis e espacialmente interpretáveis, sem exagerar conclusões estatísticas.
+

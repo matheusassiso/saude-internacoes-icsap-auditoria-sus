@@ -1,0 +1,324 @@
+---
+title: "Ambulatory Care Sensitive Hospitalizations in Mato Grosso do Sul"
+subtitle: "SIH/SUS records and Brazilian ICSAP classification, 2024"
+author: "Matheus Assis de Oliveira"
+date: "June 26, 2026"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+geometry: margin=0.82in
+fontsize: 10pt
+urlcolor: blue
+linkcolor: black
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE,
+  fig.width = 7.2,
+  fig.height = 4.6,
+  fig.align = "center"
+)
+
+library(dplyr)
+library(ggplot2)
+library(knitr)
+library(readr)
+library(scales)
+library(sf)
+library(stringr)
+library(tidyr)
+
+processed <- read_csv("../data/processed/s05_icsap_hospitalizations_ms_2024.csv", show_col_types = FALSE)
+municipal <- read_csv("../data/processed/s05_icsap_municipal_summary_ms_2024.csv", show_col_types = FALSE)
+groups <- read_csv("../data/processed/s05_icsap_group_summary_ms_2024.csv", show_col_types = FALSE)
+monthly <- read_csv("../data/processed/s05_icsap_monthly_summary_ms_2024.csv", show_col_types = FALSE)
+map_layer <- st_read("../data/processed/s05_icsap_map_ms_2024.gpkg", quiet = TRUE)
+
+theme_set(theme_minimal(base_size = 10))
+
+fmt_int <- label_comma(big.mark = ",", decimal.mark = ".")
+fmt_num <- label_number(big.mark = ",", decimal.mark = ".", accuracy = 0.1)
+fmt_money <- label_dollar(prefix = "R$ ", big.mark = ",", decimal.mark = ".", accuracy = 1)
+fmt_pct <- label_percent(accuracy = 0.1)
+
+total_hospitalizations <- nrow(processed)
+total_icsap <- sum(processed$is_icsap, na.rm = TRUE)
+total_deaths <- sum(processed$death == 1 & processed$is_icsap, na.rm = TRUE)
+total_value <- sum(processed$total_value_brl[processed$is_icsap], na.rm = TRUE)
+total_population <- sum(municipal$population, na.rm = TRUE)
+state_rate <- total_icsap / total_population * 10000
+state_share <- total_icsap / total_hospitalizations
+```
+
+\newpage
+
+# Abstract
+
+This article presents a reproducible analysis of ambulatory care sensitive hospitalizations in Mato Grosso do Sul using SIH/SUS hospital authorization records from 2024. The project applies the Brazilian `ICSAP` list published by Portaria SAS/MS no. 221/2008 to the main ICD-10 diagnosis field, filters records to MS residents, joins IBGE municipal population estimates, and calculates crude municipal rates per 10,000 residents. The final processed dataset contains `r fmt_int(total_hospitalizations)` hospitalizations for MS residents, of which `r fmt_int(total_icsap)` are classified as ICSAP. The crude statewide rate is `r fmt_num(state_rate)` per 10,000 residents, and ICSAP records represent `r fmt_pct(state_share)` of hospitalizations. Results are screening indicators and should not be interpreted as direct causal evidence of primary-care quality.
+
+# Introduction
+
+Ambulatory care sensitive hospitalizations are admissions for conditions that may often be prevented, controlled, or reduced through timely and effective primary care. They are widely used as health-system screening indicators because they connect hospital outcomes with prevention, chronic disease management, access, and continuity of care.
+
+In Brazil, the official reference is the Brazilian list of `Internacoes por Condicoes Sensiveis a Atencao Primaria`, published by Portaria SAS/MS no. 221/2008. The list groups ICD-10 diagnoses into 19 cause groups.
+
+This project asks:
+
+> Which municipalities and diagnosis groups concentrate ambulatory care sensitive hospitalizations in Mato Grosso do Sul?
+
+The analysis is descriptive. A high municipal rate can reflect primary-care issues, but it can also reflect age structure, disease burden, hospital access, coding practices, referral flows, or small-population instability.
+
+# Data
+
+The hospital data come from SIH/SUS reduced AIH files (`RD`) for Mato Grosso do Sul in 2024. The analysis uses municipality of residence, not municipality of hospitalization, so the indicator is aligned with resident population denominators.
+
+```{r data-table}
+tibble(
+  Attribute = c(
+    "Hospital system",
+    "File type",
+    "State",
+    "Year",
+    "Population denominator",
+    "Municipalities",
+    "Classification",
+    "Rate denominator"
+  ),
+  Detail = c(
+    "SIH/SUS",
+    "RD reduced AIH files",
+    "Mato Grosso do Sul",
+    "2024",
+    "IBGE municipal population estimates, SIDRA table 6579",
+    fmt_int(nrow(municipal)),
+    "Brazilian ICSAP list from Portaria SAS/MS no. 221/2008",
+    "10,000 residents"
+  )
+) |>
+  kable(col.names = c("Attribute", "Detail"))
+```
+
+# Methods
+
+## Classification
+
+The helper script standardizes the main diagnosis field and applies the Brazilian ICSAP ICD-10 groups. Each hospitalization receives:
+
+```text
+is_icsap = TRUE/FALSE
+icsap_group = 1 to 19 when applicable
+group_label = readable group label
+```
+
+## Indicators
+
+For municipality \(i\), the crude ICSAP rate is:
+
+\[
+Rate_i =
+\frac{ICSAP_i}{Population_i}
+\times 10,000
+\]
+
+The municipal ICSAP share is:
+
+\[
+Share_i =
+\frac{ICSAP_i}{Hospitalizations_i}
+\]
+
+The mortality rate among ICSAP hospitalizations is:
+
+\[
+Mortality_i =
+\frac{Deaths^{ICSAP}_i}{ICSAP_i}
+\times 100
+\]
+
+These indicators are crude and not age-standardized.
+
+# Results
+
+## Statewide Overview
+
+```{r overview-table}
+tibble(
+  Indicator = c(
+    "SIH/SUS hospitalizations among MS residents",
+    "ICSAP hospitalizations",
+    "ICSAP share of hospitalizations",
+    "Crude ICSAP rate per 10,000 residents",
+    "Deaths among ICSAP hospitalizations",
+    "Approved value for ICSAP hospitalizations"
+  ),
+  Value = c(
+    fmt_int(total_hospitalizations),
+    fmt_int(total_icsap),
+    fmt_pct(state_share),
+    fmt_num(state_rate),
+    fmt_int(total_deaths),
+    fmt_money(total_value)
+  )
+) |>
+  kable(col.names = c("Indicator", "Value"))
+```
+
+The statewide crude rate is useful as a baseline, but municipal variation is the main analytical interest.
+
+## Diagnosis Groups
+
+```{r group-table}
+groups |>
+  slice_max(icsap_hospitalizations, n = 10, with_ties = FALSE) |>
+  transmute(
+    Group = group_label,
+    Hospitalizations = fmt_int(icsap_hospitalizations),
+    `Share of ICSAP` = fmt_pct(share_icsap),
+    Deaths = fmt_int(deaths),
+    `Mortality rate` = paste0(round(mortality_rate_pct, 1), "%")
+  ) |>
+  kable(align = c("l", rep("r", 4)))
+```
+
+Kidney and urinary tract infections are the largest group in the 2024 extract. Cerebrovascular diseases, heart failure, pulmonary diseases, bacterial pneumonias, and diabetes also represent important causes, combining avoidable-care interpretation with chronic disease and acute-complication patterns.
+
+```{r group-chart}
+groups |>
+  slice_max(icsap_hospitalizations, n = 12, with_ties = FALSE) |>
+  mutate(group_label = reorder(str_wrap(group_label, 28), icsap_hospitalizations)) |>
+  ggplot(aes(x = group_label, y = icsap_hospitalizations, fill = mortality_rate_pct)) +
+  geom_col(width = 0.72) +
+  coord_flip() +
+  scale_y_continuous(labels = comma_format(big.mark = ",")) +
+  scale_fill_gradient(low = "#8AB17D", high = "#B6463A") +
+  labs(
+    title = "Largest ICSAP diagnosis groups",
+    subtitle = "Hospitalizations and mortality rate by Brazilian ICSAP group, MS residents, 2024",
+    x = NULL,
+    y = "Hospitalizations",
+    fill = "Mortality\nrate (%)",
+    caption = "Source: SIH/SUS and Portaria SAS/MS no. 221/2008."
+  )
+```
+
+## Municipal Rates
+
+```{r municipal-rate-table}
+municipal |>
+  slice_max(icsap_rate_per_10000, n = 10, with_ties = FALSE) |>
+  transmute(
+    Municipality = residence_municipality,
+    Population = fmt_int(population),
+    `ICSAP hospitalizations` = fmt_int(icsap_hospitalizations),
+    `Rate per 10,000` = fmt_num(icsap_rate_per_10000),
+    `ICSAP share` = fmt_pct(icsap_share_hospitalizations)
+  ) |>
+  kable(align = c("l", rep("r", 4)))
+```
+
+Small-population municipalities appear among the highest crude rates. This is analytically useful, but it also requires caution because a modest change in the number of cases can move the rate substantially.
+
+```{r municipal-rate-chart}
+municipal |>
+  slice_max(icsap_rate_per_10000, n = 15, with_ties = FALSE) |>
+  mutate(municipality_label = reorder(residence_municipality, icsap_rate_per_10000)) |>
+  ggplot(aes(x = municipality_label, y = icsap_rate_per_10000)) +
+  geom_col(fill = "#D97706", width = 0.72) +
+  coord_flip() +
+  labs(
+    title = "Highest municipal crude ICSAP rates",
+    subtitle = "Hospitalizations per 10,000 residents, MS, 2024",
+    x = NULL,
+    y = "Rate per 10,000 residents",
+    caption = "Source: SIH/SUS and IBGE population estimates."
+  )
+```
+
+## Monthly Pattern
+
+```{r monthly-chart}
+monthly |>
+  ggplot(aes(x = period, y = icsap_hospitalizations)) +
+  geom_line(color = "#3B82A0", linewidth = 0.8) +
+  geom_point(color = "#3B82A0", size = 1.8) +
+  scale_y_continuous(labels = comma_format(big.mark = ",")) +
+  labs(
+    title = "Monthly ICSAP hospitalizations",
+    subtitle = "MS residents, 2024",
+    x = NULL,
+    y = "ICSAP hospitalizations",
+    caption = "Source: SIH/SUS."
+  )
+```
+
+The monthly series reflects care demand, hospital flows, seasonality, and recording dynamics. A one-year monthly view is useful for description but not enough to infer stable seasonality.
+
+## Spatial Pattern
+
+```{r map-rate}
+ggplot(map_layer) +
+  geom_sf(aes(fill = icsap_rate_per_10000), color = "white", linewidth = 0.05) +
+  scale_fill_gradient(low = "#F4F1DE", high = "#B6463A", labels = label_number(accuracy = 1)) +
+  labs(
+    title = "Crude ICSAP rate by municipality",
+    subtitle = "Hospitalizations per 10,000 residents, MS, 2024",
+    fill = "Rate",
+    caption = "Source: SIH/SUS, IBGE population estimates, and geobr."
+  ) +
+  theme_void(base_size = 10)
+```
+
+The map is a screening surface. It should guide questions, not conclusions. Municipal context, age structure, service network, and primary-care coverage must be added before interpreting local performance.
+
+# Discussion
+
+The statewide ICSAP burden is substantial: `r fmt_int(total_icsap)` hospitalizations and `r fmt_money(total_value)` in approved value in 2024. The leading groups include kidney and urinary tract infections, gastroenteritis, cerebrovascular diseases, pulmonary diseases, heart failure, bacterial pneumonias, and diabetes. This profile suggests that preventable or primary-care-sensitive hospitalizations are not limited to one clinical area; they span infections, chronic disease complications, respiratory disease, and cardiovascular conditions.
+
+Municipal crude rates vary sharply. This is expected in a state with small municipalities and uneven hospital flows. The indicator is strongest when used as a first-pass screening metric, especially when paired with age standardization, multi-year averages, primary-care structure, and local validation.
+
+# Limitations
+
+Important limitations:
+
+- ICSAP is a screening indicator, not direct proof of poor primary care.
+- Rates are crude and not age-standardized.
+- Small municipalities can have unstable rates.
+- SIH/SUS does not include private admissions outside SUS financing.
+- Main diagnosis coding can vary across providers.
+- Hospital access and referral flows affect hospitalization counts.
+- One year is not enough to infer trend or persistent outlier status.
+
+# Reproducibility
+
+The helper script builds all outputs:
+
+```r
+source("src/R/icsap_sih.R")
+outputs <- build_icsap_outputs(year = 2024)
+```
+
+The article can be rendered with:
+
+```r
+rmarkdown::render(
+  "reports/s05_icsap_article.Rmd",
+  output_format = "pdf_document"
+)
+```
+
+# Conclusion
+
+S05 transforms SIH/SUS records into a municipality-level ICSAP monitoring panel for Mato Grosso do Sul. It provides a reproducible ICD-10 classification, municipal crude rates, diagnosis-group summaries, monthly patterns, and a map layer. The project is useful as a portfolio example because it combines public health concepts, microdata processing, population denominators, and cautious interpretation.
+
+# References
+
+- Ministry of Health. Portaria SAS/MS no. 221/2008: <https://bvsms.saude.gov.br/bvs/saudelegis/sas/2008/prt0221_17_04_2008.html>
+- DATASUS health information: <https://datasus.saude.gov.br/informacoes-de-saude-tabnet/>
+- IBGE SIDRA aggregate data API: <https://servicodados.ibge.gov.br/api/docs/agregados?versao=3>
+- `geobr` documentation: <https://ipeagit.github.io/geobr/>
+

@@ -1,0 +1,346 @@
+---
+title: "AIH Analytical Audit Screening"
+subtitle: "Cost, length of stay, and atypical administrative patterns in Mato Grosso do Sul, 2024"
+author: "Matheus Assis de Oliveira"
+date: "June 26, 2026"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+geometry: margin=0.82in
+fontsize: 10pt
+urlcolor: blue
+linkcolor: black
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE,
+  fig.width = 7.2,
+  fig.height = 4.6,
+  fig.align = "center"
+)
+
+library(dplyr)
+library(ggplot2)
+library(knitr)
+library(readr)
+library(scales)
+library(sf)
+library(stringr)
+library(tidyr)
+
+flagged <- read_csv("../data/processed/s06_aih_flagged_records_ms_2024.csv", show_col_types = FALSE)
+benchmarks <- read_csv("../data/processed/s06_aih_procedure_benchmarks_ms_2024.csv", show_col_types = FALSE)
+providers <- read_csv("../data/processed/s06_aih_provider_alerts_ms_2024.csv", show_col_types = FALSE)
+procedures <- read_csv("../data/processed/s06_aih_procedure_alerts_ms_2024.csv", show_col_types = FALSE)
+monthly <- read_csv("../data/processed/s06_aih_monthly_alerts_ms_2024.csv", show_col_types = FALSE)
+municipal <- read_csv("../data/processed/s06_aih_municipal_alerts_ms_2024.csv", show_col_types = FALSE)
+map_layer <- st_read("../data/processed/s06_aih_alert_map_ms_2024.gpkg", quiet = TRUE)
+
+theme_set(theme_minimal(base_size = 10))
+
+fmt_int <- label_comma(big.mark = ",", decimal.mark = ".")
+fmt_num <- label_number(big.mark = ",", decimal.mark = ".", accuracy = 0.1)
+fmt_money <- label_dollar(prefix = "R$ ", big.mark = ",", decimal.mark = ".", accuracy = 1)
+fmt_pct <- label_percent(accuracy = 0.1)
+
+total_records <- nrow(flagged)
+total_value <- sum(flagged$total_value_brl, na.rm = TRUE)
+alert_records <- sum(flagged$any_alert, na.rm = TRUE)
+alert_rate <- mean(flagged$any_alert, na.rm = TRUE)
+total_score <- sum(flagged$alert_score, na.rm = TRUE)
+```
+
+\newpage
+
+# Abstract
+
+This article presents a reproducible analytical audit-screening workflow for SIH/SUS AIH records in Mato Grosso do Sul. The project uses 2024 reduced AIH files, builds robust within-procedure benchmarks for approved value and length of stay, flags atypical records, and aggregates verification alerts by provider, procedure, month, and municipality. The final dataset contains `r fmt_int(total_records)` AIH records and `r fmt_int(alert_records)` records with at least one verification alert. These outputs are screening signals only. They are not accusations, fraud findings, or formal audit conclusions.
+
+# Introduction
+
+Administrative hospital data can support audit planning when used carefully. AIH records contain procedure, provider, municipality, approved value, length of stay, ICU indicators, diagnosis, and discharge outcome. These fields make it possible to construct simple verification queues: records or provider-procedure combinations that differ strongly from comparable records.
+
+The key principle is:
+
+> An outlier is a question, not a conclusion.
+
+The purpose of this project is to demonstrate responsible analytical audit design: robust thresholds, peer comparison by procedure, transparent scoring, and cautious interpretation.
+
+# Data
+
+The data come from SIH/SUS reduced AIH files (`RD`) for Mato Grosso do Sul in 2024.
+
+```{r data-table}
+tibble(
+  Attribute = c(
+    "Source",
+    "File type",
+    "State",
+    "Year",
+    "Unit",
+    "Provider identifier",
+    "Procedure identifier",
+    "Records"
+  ),
+  Detail = c(
+    "SIH/SUS",
+    "RD reduced AIH files",
+    "Mato Grosso do Sul",
+    "2024",
+    "AIH hospitalization record",
+    "CNES",
+    "Performed procedure code",
+    fmt_int(total_records)
+  )
+) |>
+  kable(col.names = c("Attribute", "Detail"))
+```
+
+# Methods
+
+## Procedure Benchmarks
+
+Different procedures have different expected costs and lengths of stay. The workflow therefore builds benchmarks within performed procedure. Procedures with at least 30 records receive robust thresholds:
+
+\[
+HighCostThreshold_p = Q3(Value_p) + 3 \times IQR(Value_p)
+\]
+
+\[
+LongStayThreshold_p = Q3(LOS_p) + 3 \times IQR(LOS_p)
+\]
+
+The 3-IQR rule is intentionally conservative.
+
+## Alert Flags
+
+Record-level verification flags are:
+
+```{r flags-table}
+tibble(
+  Flag = c(
+    "High cost within procedure",
+    "Long stay within procedure",
+    "High cost per day",
+    "ICU value without ICU days",
+    "Death in low-mortality procedure group"
+  ),
+  Definition = c(
+    "Approved value exceeds procedure Q3 + 3 IQR and is at least R$ 1,000",
+    "Length of stay exceeds procedure Q3 + 3 IQR and is at least 10 days",
+    "Cost per day is in the top 1% of the extract and total value is at least R$ 1,000",
+    "ICU value is positive but ICU day fields are zero",
+    "Death occurs in a procedure group with observed mortality below 1% and at least 100 records"
+  )
+) |>
+  kable()
+```
+
+The alert score weights flags by review priority. It is not a probability of irregularity.
+
+# Results
+
+## Overall Alerts
+
+```{r overview-table}
+tibble(
+  Indicator = c(
+    "AIH records",
+    "Total approved value",
+    "Records with any verification alert",
+    "Alert rate",
+    "Total alert score",
+    "Procedure benchmark groups"
+  ),
+  Value = c(
+    fmt_int(total_records),
+    fmt_money(total_value),
+    fmt_int(alert_records),
+    fmt_pct(alert_rate),
+    fmt_int(total_score),
+    fmt_int(nrow(benchmarks))
+  )
+) |>
+  kable(col.names = c("Indicator", "Value"))
+```
+
+```{r alert-count-table}
+tibble(
+  `Alert type` = c(
+    "High cost within procedure",
+    "Long stay within procedure",
+    "High cost per day",
+    "ICU value without ICU days",
+    "Death in low-mortality procedure group"
+  ),
+  Records = c(
+    sum(flagged$high_cost_flag, na.rm = TRUE),
+    sum(flagged$long_stay_flag, na.rm = TRUE),
+    sum(flagged$high_cost_per_day_flag, na.rm = TRUE),
+    sum(flagged$icu_value_without_icu_days_flag, na.rm = TRUE),
+    sum(flagged$death_low_mortality_procedure_flag, na.rm = TRUE)
+  )
+) |>
+  kable(align = c("l", "r"))
+```
+
+The largest alert category is high cost within procedure, followed by long stay. This reflects the design of the screening system: it focuses on values and stay duration relative to procedure peers.
+
+## Provider Screening Summary
+
+```{r provider-table}
+providers |>
+  slice_max(alert_score, n = 10, with_ties = FALSE) |>
+  transmute(
+    CNES = cnes,
+    Municipality = hospitalization_municipality,
+    Hospitalizations = fmt_int(hospitalizations),
+    `Alert records` = fmt_int(alert_records),
+    `Alert score` = fmt_int(alert_score),
+    `Alert rate` = fmt_pct(alert_rate)
+  ) |>
+  kable(align = c("l", "l", rep("r", 4)))
+```
+
+Provider summaries are workload-weighted: large providers can naturally appear near the top because they perform more hospitalizations. A review workflow should consider both alert score and alert rate.
+
+```{r provider-chart}
+providers |>
+  slice_max(alert_score, n = 12, with_ties = FALSE) |>
+  mutate(provider_label = reorder(cnes, alert_score)) |>
+  ggplot(aes(x = provider_label, y = alert_score, fill = alert_rate)) +
+  geom_col(width = 0.72) +
+  coord_flip() +
+  scale_y_continuous(labels = comma_format(big.mark = ",")) +
+  scale_fill_gradient(low = "#8AB17D", high = "#B6463A", labels = percent_format(accuracy = 1)) +
+  labs(
+    title = "Highest provider alert scores",
+    subtitle = "CNES-level screening summary, MS, 2024",
+    x = "CNES",
+    y = "Alert score",
+    fill = "Alert rate",
+    caption = "Source: SIH/SUS RD files. Screening signal only."
+  )
+```
+
+## Procedure Screening Summary
+
+```{r procedure-table}
+procedures |>
+  slice_max(alert_score, n = 10, with_ties = FALSE) |>
+  transmute(
+    `Procedure code` = performed_procedure,
+    Hospitalizations = fmt_int(hospitalizations),
+    Providers = fmt_int(providers),
+    `Alert records` = fmt_int(alert_records),
+    `Alert score` = fmt_int(alert_score),
+    `Alert rate` = fmt_pct(alert_rate)
+  ) |>
+  kable(align = c("l", rep("r", 5)))
+```
+
+Procedure summaries help separate provider size from procedure-specific patterns. They also indicate where procedure description metadata would be valuable in a later version.
+
+## Monthly Pattern
+
+```{r monthly-chart}
+monthly |>
+  ggplot(aes(x = period, y = alert_records)) +
+  geom_line(color = "#3B82A0", linewidth = 0.8) +
+  geom_point(color = "#3B82A0", size = 1.8) +
+  scale_y_continuous(labels = comma_format(big.mark = ",")) +
+  labs(
+    title = "Monthly verification alerts",
+    subtitle = "AIH records with at least one alert, MS, 2024",
+    x = NULL,
+    y = "Alert records",
+    caption = "Source: SIH/SUS RD files."
+  )
+```
+
+Monthly variation can reflect production volume, case mix, coding, seasonality, and reporting dynamics. It should not be interpreted by itself.
+
+## Municipal Pattern
+
+```{r municipal-table}
+municipal |>
+  slice_max(alert_score, n = 10, with_ties = FALSE) |>
+  transmute(
+    Municipality = hospitalization_municipality,
+    Hospitalizations = fmt_int(hospitalizations),
+    Providers = fmt_int(providers),
+    `Alert records` = fmt_int(alert_records),
+    `Alert score` = fmt_int(alert_score),
+    `Alert rate` = fmt_pct(alert_rate)
+  ) |>
+  kable(align = c("l", rep("r", 5)))
+```
+
+```{r map-alert-rate}
+ggplot(map_layer) +
+  geom_sf(aes(fill = alert_rate), color = "white", linewidth = 0.05) +
+  scale_fill_gradient(low = "#F4F1DE", high = "#B6463A", labels = percent_format(accuracy = 1), na.value = "grey90") +
+  labs(
+    title = "Municipal AIH alert rate",
+    subtitle = "Share of AIH records with at least one verification alert, MS, 2024",
+    fill = "Alert rate",
+    caption = "Source: SIH/SUS RD files and geobr. Screening signal only."
+  ) +
+  theme_void(base_size = 10)
+```
+
+# Discussion
+
+This project demonstrates how administrative health data can be turned into a review queue without making unsupported claims. The workflow has three safeguards:
+
+1. Procedures are compared with their own procedure peers.
+2. Thresholds are conservative robust outlier rules.
+3. Results are reported as verification alerts.
+
+The top provider and municipality rankings are strongly influenced by volume. For real review planning, analysts should combine alert counts, alert rates, procedure mix, clinical context, provider profile, and documentation review.
+
+# Limitations
+
+Important limitations:
+
+- AIH records are administrative billing/authorization records, not full medical charts.
+- Outliers can be clinically legitimate.
+- Procedure codes and CNES records may reflect local workflows.
+- Procedure descriptions are not decoded in this first version.
+- The alert score is a triage score, not a probability of fraud.
+- Formal audit requires regulation, documentation, clinical review, and due process.
+
+# Reproducibility
+
+The helper script builds all outputs:
+
+```r
+source("src/R/aih_audit.R")
+outputs <- build_aih_audit_outputs(year = 2024)
+```
+
+The article can be rendered with:
+
+```r
+rmarkdown::render(
+  "reports/s06_aih_analytical_audit_article.Rmd",
+  output_format = "pdf_document"
+)
+```
+
+# Conclusion
+
+S06 adds an analytical audit-screening project to the health portfolio. It extracts SIH/SUS AIH records, builds robust procedure benchmarks, flags atypical records, and summarizes review signals by provider, procedure, month, and municipality. The project is useful because it combines technical detection logic with responsible communication: alerts are questions for verification, not conclusions.
+
+# References
+
+- DATASUS health information: <https://datasus.saude.gov.br/informacoes-de-saude-tabnet/>
+- SIH/SUS morbidity access page: <https://datasus.saude.gov.br/acesso-a-informacao/morbidade-hospitalar-do-sus-sih-sus/>
+- `datasusr` package: <https://github.com/rfsaldanha/datasusr>
+- `geobr` documentation: <https://ipeagit.github.io/geobr/>
+
