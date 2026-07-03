@@ -14,7 +14,7 @@
 
 **[Abrir dashboard online](https://matheusassiso.github.io/saude-internacoes-icsap-auditoria-sus/)**
 
-Painel com mapa dos 79 municípios de Mato Grosso do Sul e camadas alternáveis para prioridade integrada, taxa de ICSAP e alertas AIH.
+Painel com mapa limitado aos 79 municípios de Mato Grosso do Sul, camadas alternáveis para prioridade integrada, taxa de ICSAP e alertas AIH, indicadores descritivos e recortes exploratórios.
 
 ![Prioridade integrada](figures/01_mapa_prioridade_integrada.png)
 
@@ -122,6 +122,7 @@ Etapas principais:
 
 - [Dashboard interativo online](https://matheusassiso.github.io/saude-internacoes-icsap-auditoria-sus/)
 - [Arquivo HTML do dashboard](docs/internacoes_icsap_auditoria_dashboard.html)
+- [Mapa interativo em tela cheia](docs/internacoes_icsap_auditoria_map.html)
 - [Relatório PDF](internacoes_icsap_auditoria_sus.pdf)
 - [Relatório RMarkdown](internacoes_icsap_auditoria_sus.Rmd)
 - [Relatório HTML](docs/relatorio.html)
@@ -139,7 +140,9 @@ Etapas principais:
 │   └── processed/
 ├── docs/
 │   ├── index.html
+│   ├── figures/
 │   ├── internacoes_icsap_auditoria_dashboard.html
+│   ├── internacoes_icsap_auditoria_map.html
 │   └── relatorio.html
 ├── figures/
 ├── scripts/
