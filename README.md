@@ -1,41 +1,176 @@
-# Internacoes, ICSAP e Auditoria Hospitalar SUS
+# Internações, ICSAP e Auditoria Hospitalar SUS | Mato Grosso do Sul
 
-## Motivacao
+**Análise municipal da produção hospitalar, internações sensíveis à atenção primária e alertas exploratórios de AIH**
 
-A producao hospitalar do SUS concentra volume, valores e eventos clinico-administrativos que precisam de triagem clara antes da auditoria documental.
+![R](https://img.shields.io/badge/R-276DC3?style=flat&logo=r&logoColor=white)
+![RStudio](https://img.shields.io/badge/RStudio-75AADB?style=flat&logo=rstudio&logoColor=white)
+![RMarkdown](https://img.shields.io/badge/Relatório-RMarkdown-orange?style=flat)
+![Mapas](https://img.shields.io/badge/Mapas-SF%20%2B%20Leaflet-green?style=flat)
+![Status](https://img.shields.io/badge/status-concluído-success?style=flat)
 
-## Objetivo da pesquisa
+---
 
-Organizar indicadores do SIH/SUS, internacoes sensiveis a atencao primaria e alertas de AIH para priorizar municipios e registros.
+## Dashboard interativo
 
-## Resultados
+**[Abrir dashboard](docs/internacoes_icsap_auditoria_dashboard.html)**
 
-A pesquisa combina volume, valor aprovado, mortalidade bruta, permanencia, ICSAP, prestadores e alertas administrativos em paineis de auditoria exploratoria.
+Painel com mapa dos 79 municípios de Mato Grosso do Sul e camadas alternáveis para prioridade integrada, taxa de ICSAP e alertas AIH.
 
-## Dashboard executivo
+![Prioridade integrada](figures/01_mapa_prioridade_integrada.png)
 
-Abra a apresentacao em [docs/index.html](docs/index.html). Ela resume a pesquisa, lista os entregaveis e aponta para os dashboards originais de cada estudo.
+---
 
-## Projetos incluidos
+## Objetivo
 
-| Estudo | Dashboard | Relatorios | Mapa |
-|---|---|---|---|
-| 01 - internacoes-hospitalares-sus-ms | [Dashboard](projects/01 - internacoes-hospitalares-sus-ms/docs/index.html) | [01-internacoes-hospitalares-sus-ms.html](projects/01 - internacoes-hospitalares-sus-ms/reports/01-internacoes-hospitalares-sus-ms.html)<br>[01-internacoes-hospitalares-sus-ms.pdf](projects/01 - internacoes-hospitalares-sus-ms/reports/01-internacoes-hospitalares-sus-ms.pdf) | Sim |
-| 05 - internacoes-condicoes-sensiveis-atencao-primaria | [Dashboard](projects/05 - internacoes-condicoes-sensiveis-atencao-primaria/docs/index.html) | [05-ambulatory-care-sensitive-hospitalizations.html](projects/05 - internacoes-condicoes-sensiveis-atencao-primaria/reports/05-ambulatory-care-sensitive-hospitalizations.html)<br>[05-ambulatory-care-sensitive-hospitalizations.pdf](projects/05 - internacoes-condicoes-sensiveis-atencao-primaria/reports/05-ambulatory-care-sensitive-hospitalizations.pdf) | Sim |
-| 06 - auditoria-analitica-aih | [Dashboard](projects/06 - auditoria-analitica-aih/docs/index.html) | [06-aih-analytical-audit.html](projects/06 - auditoria-analitica-aih/reports/06-aih-analytical-audit.html)<br>[06-aih-analytical-audit.pdf](projects/06 - auditoria-analitica-aih/reports/06-aih-analytical-audit.pdf) | Sim |
+Integrar três análises hospitalares do SUS em um único projeto profissional:
+
+1. produção de internações hospitalares;
+2. internações por condições sensíveis à atenção primária (ICSAP);
+3. alertas exploratórios de auditoria em AIH.
+
+A pergunta central é:
+
+> Como priorizar territórios e registros hospitalares para análise técnica quando volume, evitabilidade e alertas administrativos são observados em conjunto?
+
+---
+
+## Motivação
+
+Internações, ICSAP e auditoria AIH costumam ser analisadas em painéis separados. Essa separação dificulta uma leitura operacional: municípios com grande produção podem ser polos regionais, municípios com alta ICSAP podem indicar pressão evitável sobre a rede, e municípios com muitos alertas AIH podem exigir revisão documental mais cuidadosa.
+
+Este projeto consolida essas dimensões para apoiar:
+
+- análise descritiva da produção hospitalar;
+- análise exploratória de prioridades;
+- análise geoespacial municipal;
+- comunicação por relatório, mapas e dashboard.
+
+---
+
+## Dados
+
+| Dimensão | Fonte analítica | Indicadores usados |
+|---|---|---|
+| Internações SUS | SIH/SUS RD 2024 | internações, valor aprovado, óbitos, permanência e mortalidade bruta |
+| ICSAP | SIH/SUS com classificação ICSAP | internações sensíveis à APS, taxa por 10 mil habitantes, óbitos e valor aprovado |
+| Auditoria AIH | regras exploratórias sobre AIH | registros com alerta, escore de alerta, prestadores e taxa de alerta |
+| Mapas | malha municipal de MS | 79 municípios com indicadores consolidados |
+
+---
+
+## Método
+
+```text
+Bases processadas → padronização municipal → integração dos indicadores
+→ índice exploratório → perfis municipais → mapas → dashboard e relatório
+```
+
+Etapas principais:
+
+1. organização das bases finais em `data/source/`;
+2. consolidação municipal em `data/processed/`;
+3. cálculo de prioridade integrada;
+4. classificação dos municípios em perfis exploratórios;
+5. geração de mapas e rankings;
+6. publicação do PDF, HTML e dashboard interativo.
+
+---
+
+## Resultados descritivos
+
+| Indicador | Resultado |
+|---|---:|
+| Municípios no mapa | 79 |
+| Municípios com internação registrada | 67 |
+| Internações SUS | 214.811 |
+| Valor aprovado | R$ 329.824.342 |
+| Óbitos hospitalares | 8.900 |
+| ICSAP | 37.750 |
+| Valor aprovado em ICSAP | R$ 59.931.019 |
+| Registros com alerta AIH | 13.478 |
+| Escore total de alerta AIH | 29.963 |
+
+---
+
+## Mapas e evidências visuais
+
+### Prioridade integrada
+
+![Prioridade integrada](figures/01_mapa_prioridade_integrada.png)
+
+### Taxa de ICSAP por 10 mil habitantes
+
+![Taxa ICSAP](figures/02_mapa_icsap_taxa.png)
+
+### Taxa de registros com alerta AIH
+
+![Alertas AIH](figures/03_mapa_alertas_aih.png)
+
+### Rankings exploratórios
+
+![Ranking internações](figures/04_ranking_internacoes.png)
+
+![Ranking ICSAP](figures/05_ranking_icsap.png)
+
+### Cruzamento exploratório
+
+![Dispersão ICSAP e alertas](figures/06_dispersao_icsap_alertas.png)
+
+---
+
+## Entregáveis
+
+- [Dashboard interativo](docs/internacoes_icsap_auditoria_dashboard.html)
+- [Relatório PDF](internacoes_icsap_auditoria_sus.pdf)
+- [Relatório RMarkdown](internacoes_icsap_auditoria_sus.Rmd)
+- [Relatório HTML](docs/relatorio.html)
+- [Base municipal consolidada](data/processed/municipios_internacoes_icsap_auditoria.csv)
+- [GeoJSON municipal](data/processed/ms_internacoes_icsap_auditoria.geojson)
+
+---
 
 ## Estrutura
 
-- `docs/index.html`: apresentacao executiva do repositorio.
-- `projects/`: estudos originais preservados para auditoria.
-- `projects/*/src/R`: scripts analiticos.
-- `projects/*/reports`: relatorios tecnicos e figuras.
-- `projects/*/data/processed`: bases finais usadas nos dashboards.
+```text
+.
+├── data/
+│   ├── source/
+│   └── processed/
+├── docs/
+│   ├── index.html
+│   ├── internacoes_icsap_auditoria_dashboard.html
+│   └── relatorio.html
+├── figures/
+├── scripts/
+│   └── build_project.R
+├── internacoes_icsap_auditoria_sus.Rmd
+├── internacoes_icsap_auditoria_sus.pdf
+├── saude-internacoes-icsap-auditoria-sus.Rproj
+└── COMMIT_INSTRUCTIONS.txt
+```
 
-## Reprodutibilidade
+---
 
-Os dados brutos pesados, caches publicos e bases processadas record-level acima de 50 MB nao entram no Git para manter o repositorio publicavel. Quando necessario, consulte `data/raw/README.md`, scripts em `src/R` e instrucoes de download dentro de cada estudo.
+## Como reproduzir
 
-## Limites
+Abra `saude-internacoes-icsap-auditoria-sus.Rproj` no RStudio e execute:
 
-As analises sao exploratorias e tecnicas. Mapas, rankings e modelos apoiam triagem e hipotese; nao substituem validacao institucional, auditoria documental ou decisao clinica.
+```r
+source("scripts/build_project.R")
+```
+
+O script reconstrói dados consolidados, figuras, GeoJSON, dashboard, relatório HTML e PDF.
+
+---
+
+## Limitações
+
+A análise é exploratória. Mortalidade bruta não ajusta risco, ICSAP não prova falha da atenção primária e alerta AIH não confirma irregularidade. Os resultados servem para priorizar investigação técnica, auditoria documental e validação institucional.
+
+---
+
+## Contato
+
+**Matheus Assis de Oliveira**
+
+[![GitHub](https://img.shields.io/badge/GitHub-matheusassiso-181717?style=flat&logo=github&logoColor=white)](https://github.com/matheusassiso)

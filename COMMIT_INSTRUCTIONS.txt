@@ -1,0 +1,27 @@
+Publicação do projeto
+=====================
+
+Diretório:
+C:\Users\Matheus\Documents\Codex\saude-internacoes-icsap-auditoria-sus
+
+Fluxo recomendado:
+
+1. Abrir o projeto no RStudio:
+   saude-internacoes-icsap-auditoria-sus.Rproj
+
+2. Reconstruir os resultados:
+   source("scripts/build_project.R")
+
+3. Conferir os entregáveis:
+   README.md
+   internacoes_icsap_auditoria_sus.Rmd
+   internacoes_icsap_auditoria_sus.pdf
+   docs/internacoes_icsap_auditoria_dashboard.html
+   docs/relatorio.html
+   figures/
+
+4. Publicar:
+   git status
+   git add .
+   git commit -m "Rebuild SUS admissions ICSAP audit portfolio"
+   git push origin main
