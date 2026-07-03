@@ -12,7 +12,7 @@
 
 ## Dashboard interativo
 
-**[Abrir dashboard](docs/internacoes_icsap_auditoria_dashboard.html)**
+**[Abrir dashboard online](https://matheusassiso.github.io/saude-internacoes-icsap-auditoria-sus/)**
 
 Painel com mapa dos 79 municípios de Mato Grosso do Sul e camadas alternáveis para prioridade integrada, taxa de ICSAP e alertas AIH.
 
@@ -120,7 +120,8 @@ Etapas principais:
 
 ## Entregáveis
 
-- [Dashboard interativo](docs/internacoes_icsap_auditoria_dashboard.html)
+- [Dashboard interativo online](https://matheusassiso.github.io/saude-internacoes-icsap-auditoria-sus/)
+- [Arquivo HTML do dashboard](docs/internacoes_icsap_auditoria_dashboard.html)
 - [Relatório PDF](internacoes_icsap_auditoria_sus.pdf)
 - [Relatório RMarkdown](internacoes_icsap_auditoria_sus.Rmd)
 - [Relatório HTML](docs/relatorio.html)
