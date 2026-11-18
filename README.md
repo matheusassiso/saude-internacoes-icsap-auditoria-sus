@@ -10,15 +10,44 @@
 
 ---
 
-## Dashboard interativo
+## Abrir o HTML no navegador
 
-**[Abrir dashboard online](https://matheusassiso.github.io/saude-internacoes-icsap-auditoria-sus/)**
+[Baixe o ZIP do repositório](https://github.com/matheusassiso/saude-internacoes-icsap-auditoria-sus/archive/refs/heads/main.zip), extraia o conteúdo e abra [`docs/internacoes_icsap_auditoria_dashboard.html`](docs/internacoes_icsap_auditoria_dashboard.html) no navegador.
+
+O mapa usa bibliotecas e camadas cartográficas da internet.
 
 Painel com mapa limitado aos 79 municípios de Mato Grosso do Sul, camadas alternáveis para prioridade integrada, taxa de ICSAP e alertas AIH, indicadores descritivos e recortes exploratórios.
 
 ![Prioridade integrada](figures/01_mapa_prioridade_integrada.png)
 
 ---
+
+### Indicadores do dashboard
+
+| Indicador | Valor |
+| --- | --- |
+| Municípios no mapa | 79 |
+| Municípios com internação registrada | 67 |
+| Internações SUS | 214.811 |
+| Valor aprovado | R$ 329.824.342 |
+| Óbitos hospitalares | 8.900 |
+| ICSAP | 37.750 |
+| Valor aprovado em ICSAP | R$ 59.931.019 |
+| Registros com alerta AIH | 13.478 |
+| Escore total de alerta AIH | 29.963 |
+
+### Tabela do dashboard
+
+| Município | Perfil | Prioridade | Taxa ICSAP/10 mil |
+| --- | --- | --- | --- |
+| Campo Grande | Polo hospitalar | 0,80988 | 91,6 |
+| Dourados | Polo hospitalar | 0,48076 | 86,0 |
+| Três Lagoas | Polo hospitalar | 0,38158 | 123,0 |
+| Aquidauana | Alta ICSAP e alto alerta AIH | 0,32915 | 225,1 |
+| Ponta Porã | Polo hospitalar | 0,29531 | 186,2 |
+| Corumbá | Polo hospitalar | 0,28445 | 124,9 |
+| Paranaíba | Alta ICSAP e alto alerta AIH | 0,22992 | 213,2 |
+| Nova Andradina | Polo hospitalar | 0,22927 | 105,1 |
 
 ## Objetivo
 
@@ -120,7 +149,6 @@ Etapas principais:
 
 ## Entregáveis
 
-- [Dashboard interativo online](https://matheusassiso.github.io/saude-internacoes-icsap-auditoria-sus/)
 - [Arquivo HTML do dashboard](docs/internacoes_icsap_auditoria_dashboard.html)
 - [Mapa interativo em tela cheia](docs/internacoes_icsap_auditoria_map.html)
 - [Relatório PDF](internacoes_icsap_auditoria_sus.pdf)
